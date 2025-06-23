@@ -1,0 +1,281 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String
+  name            String
+  profileImageUrl String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  equipment               Equipment[]
+  organizationsCreated    Organization[]        @relation("OrganizationCreator")
+  organizationMemberships OrganizationMember[]
+  categoriesCreated       Category[]
+  maintenanceRecords      MaintenanceRecord[]   @relation("MaintenancePerformer")
+  locations               Location[]            @relation("LocationCreator")
+  equipmentLocationLogs   EquipmentLocation[]   @relation("LocationUpdater")
+  sharingPermissionsGiven SharingPermission[]   @relation("PermissionCreator")
+  sharingPermissionsReceived SharingPermission[] @relation("PermissionReceiver")
+  eventsCreated           Event[]               @relation("EventCreator")
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  logoUrl     String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  createdBy  User                @relation("OrganizationCreator", fields: [createdById], references: [id])
+  members    OrganizationMember[]
+  equipment  Equipment[]
+  locations  Location[]
+  events     Event[]
+}
+
+model OrganizationMember {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  role           Role     @default(MEMBER)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  icon        String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  createdBy User        @relation(fields: [createdById], references: [id])
+  equipment Equipment[]
+}
+
+model Equipment {
+  id              String    @id @default(uuid())
+  name            String
+  description     String?
+  serialNumber    String?
+  model           String?
+  manufacturer    String?
+  purchaseDate    DateTime?
+  purchasePrice   Float?
+  currentValue    Float?
+  categoryId      String?
+  ownerId         String
+  organizationId  String?
+  status          EquipmentStatus @default(ACTIVE)
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  category          Category?           @relation(fields: [categoryId], references: [id])
+  owner             User                @relation(fields: [ownerId], references: [id])
+  organization      Organization?       @relation(fields: [organizationId], references: [id])
+  images            EquipmentImage[]
+  customFields      CustomField[]
+  maintenanceRecords MaintenanceRecord[]
+  maintenanceSchedules MaintenanceSchedule[]
+  locationLogs      EquipmentLocation[]
+  sharingPermissions SharingPermission[]
+  eventEquipment    EventEquipment[]
+}
+
+model EquipmentImage {
+  id          String   @id @default(uuid())
+  equipmentId String
+  imageUrl    String
+  isPrimary   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+}
+
+model CustomField {
+  id          String   @id @default(uuid())
+  equipmentId String
+  fieldName   String
+  fieldValue  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+}
+
+model MaintenanceRecord {
+  id              String   @id @default(uuid())
+  equipmentId     String
+  maintenanceType String
+  description     String
+  performedById   String
+  maintenanceDate DateTime
+  cost            Float?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  performedBy User      @relation("MaintenancePerformer", fields: [performedById], references: [id])
+}
+
+model MaintenanceSchedule {
+  id             String   @id @default(uuid())
+  equipmentId    String
+  maintenanceType String
+  frequency      Int      // In days
+  lastPerformed  DateTime?
+  nextDue        DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+}
+
+model Location {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  address        String?
+  createdById    String
+  organizationId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  createdBy  User                @relation("LocationCreator", fields: [createdById], references: [id])
+  organization Organization?     @relation(fields: [organizationId], references: [id])
+  equipmentLogs EquipmentLocation[]
+}
+
+model EquipmentLocation {
+  id          String          @id @default(uuid())
+  equipmentId String
+  locationId  String
+  status      LocationStatus  @default(STORED)
+  updatedById String
+  timestamp   DateTime        @default(now())
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  // Relations
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  location  Location  @relation(fields: [locationId], references: [id])
+  updatedBy User      @relation("LocationUpdater", fields: [updatedById], references: [id])
+}
+
+model SharingPermission {
+  id              String         @id @default(uuid())
+  equipmentId     String
+  userId          String
+  permissionLevel PermissionLevel @default(VIEW)
+  createdById     String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  // Relations
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  user      User      @relation("PermissionReceiver", fields: [userId], references: [id])
+  createdBy User      @relation("PermissionCreator", fields: [createdById], references: [id])
+
+  @@unique([equipmentId, userId])
+}
+
+model Event {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  startDate      DateTime
+  endDate        DateTime
+  location       String?
+  organizationId String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  organization Organization?    @relation(fields: [organizationId], references: [id])
+  createdBy    User             @relation("EventCreator", fields: [createdById], references: [id])
+  equipment    EventEquipment[]
+}
+
+model EventEquipment {
+  id          String           @id @default(uuid())
+  eventId     String
+  equipmentId String
+  status      EventEquipmentStatus @default(PACKED)
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+
+  @@unique([eventId, equipmentId])
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum EquipmentStatus {
+  ACTIVE
+  MAINTENANCE
+  LOST
+  SOLD
+}
+
+enum LocationStatus {
+  STORED
+  IN_TRANSIT
+  IN_USE
+}
+
+enum PermissionLevel {
+  VIEW
+  EDIT
+  ADMIN
+}
+
+enum EventEquipmentStatus {
+  PACKED
+  UNPACKED
+  IN_USE
+  RETURNED
+}
